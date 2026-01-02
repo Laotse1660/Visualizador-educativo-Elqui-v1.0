@@ -2,97 +2,63 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 1. CONFIGURACIÓN DE LA PÁGINA
-st.set_page_config(page_title="Monitor Educativo Coquimbo 2024", layout="wide")
+# 1. CONFIGURACIÓN Y CARGA
+st.set_page_config(page_title="Monitor Educativo 2024", layout="wide")
 
-# 2. CARGA DE DATOS
-@st.cache_data # Esto hace que la app sea rápida al no recargar el CSV cada vez
+@st.cache_data
 def load_data():
-    df = pd.read_csv('tabla_integral_criticos_2024.csv')
-    return df
+    return pd.read_csv('tabla_integral_criticos_2024.csv')
 
 df = load_data()
 
-# 3. INTERFAZ: Título y Filtros
-st.title("📊 Seguimiento de Establecimientos Críticos (2019-2024)")
-st.markdown("Análisis de resultados Simce e Indicadores de Desarrollo Personal y Social (IDPS)")
-
+# 2. FILTROS EN LA BARRA LATERAL
 with st.sidebar:
-    st.header("Filtros de Búsqueda")
+    st.header("🔍 Filtros y Búsqueda")
     comuna_sel = st.multiselect("Selecciona Comuna(s):", 
-                               options=df['Comuna'].unique(), 
+                               options=sorted(df['Comuna'].unique()), 
                                default=df['Comuna'].unique())
     
-    nivel_2019 = st.selectbox("Filtrar por Categoría 2019:", 
-                             ["Todos", "INSUFICIENTE", "MEDIO-BAJO"])
+    # Filtro para la Ficha Individual
+    df_comuna_f = df[df['Comuna'].isin(comuna_sel)]
+    colegio_sel = st.selectbox("🎯 Ver Ficha de un Colegio:", 
+                              options=sorted(df_comuna_f['Nombre Establecimiento'].unique()))
 
-# Aplicar Filtros
+# Aplicamos el filtro general a la base
 df_filtered = df[df['Comuna'].isin(comuna_sel)]
-if nivel_2019 != "Todos":
-    # Filtramos si fue crítico en básica o media
-    df_filtered = df_filtered[(df_filtered['Cat_2019_Basica'] == nivel_2019) | 
-                              (df_filtered['Cat_2019_Media'] == nivel_2019)]
 
-# 4. VISUALIZACIONES PRINCIPALES
 # =========================================================
-# BLOQUE DE GRÁFICOS (VISUALIZACIONES PRINCIPALES)
+# 3. BLOQUE DE ANÁLISIS ESTADÍSTICO (VA AQUÍ) <<<
+# =st.subheader("📈 Análisis de Relación: Autoestima vs. Resultados (Grupo Seleccionado)")
+
+col_corr1, col_corr2 = st.columns(2)
+# Calculamos correlación de Pearson (r)
+r_lect = df_filtered['Autoestima_4B'].corr(df_filtered['Simce_Lect_4B'])
+r_mate = df_filtered['Autoestima_4B'].corr(df_filtered['Simce_Mate_4B'])
+
+with col_corr1:
+    st.metric("Vínculo Autoestima-Lectura (r)", f"{r_lect:.2f}" if pd.notnull(r_lect) else "N/A")
+with col_corr2:
+    st.metric("Vínculo Autoestima-Matemática (r)", f"{r_mate:.2f}" if pd.notnull(r_mate) else "N/A")
 # =========================================================
 
-# 1. Preparación de datos (Limpieza para evitar errores de puntos vacíos)
-# Filtramos solo los colegios que tengan puntajes y IDPS válidos para graficar
-df_grafico_4b = df_filtered.dropna(subset=["Simce_Lect_4B", "Simce_Mate_4B", "Autoestima_4B"])
-df_grafico_2m = df_filtered.dropna(subset=["Simce_Lect_2M", "Simce_Mate_2M", "Autoestima_2M"])
-
-# 2. Creamos dos columnas en la web para poner los gráficos lado a lado
+# 4. GRÁFICOS GENERALES (Burbujas)
+st.divider()
+st.subheader("📌 Comparativa General: Rendimiento vs Autoestima")
 col1, col2 = st.columns(2)
+# (Aquí va el código de los gráficos px.scatter que ya tienes)
+# ...
 
-with col1:
-    st.subheader("📌 4° Básico: Rendimiento vs Autoestima")
-    if not df_grafico_4b.empty:
-        # Creamos el gráfico de burbujas (Scatter Plot)
-        fig_4b = px.scatter(
-            df_grafico_4b, 
-            x="Simce_Lect_4B",      # Eje Horizontal
-            y="Simce_Mate_4B",      # Eje Vertical
-            size="Autoestima_4B",   # El tamaño de la burbuja es la Autoestima
-            color="Comuna",         # Cada color representa una comuna
-            hover_name="Nombre Establecimiento", # Lo que sale al pasar el mouse
-            template="plotly_white",
-            title="Puntajes 2024 (4° Básico)"
-        )
-        # Mostramos el gráfico en la web
-        st.plotly_chart(fig_4b, use_container_width=True)
-    else:
-        st.info("No hay datos de 4° Básico para los filtros seleccionados.")
+# 5. FICHA TÉCNICA INDIVIDUAL
+st.divider()
+df_unitario = df[df['Nombre Establecimiento'] == colegio_sel].iloc[0]
+st.header(f"🏫 Ficha Individual: {colegio_sel}")
 
-with col2:
-    st.subheader("📌 II Medio: Rendimiento vs Autoestima")
-    if not df_grafico_2m.empty:
-        # Repetimos la lógica para Educación Media
-        fig_2m = px.scatter(
-            df_grafico_2m, 
-            x="Simce_Lect_2M", 
-            y="Simce_Mate_2M",
-            size="Autoestima_2M", 
-            color="Comuna",
-            hover_name="Nombre Establecimiento",
-            template="plotly_white",
-            title="Puntajes 2024 (II Medio)"
-        )
-        st.plotly_chart(fig_2m, use_container_width=True)
-    else:
-        st.info("No hay datos de II Medio para los filtros seleccionados.")
+# AQUI INSERTAS EL GRÁFICO DE BARRAS APILADAS (EDA) <<<
+st.subheader("📊 Distribución por Estándares de Aprendizaje (%)")
+# (Aquí va el código de px.bar con color_discrete_map que te pasé antes)
+# ...
 
-# 5. TABLA DE DATOS DETALLADA
-st.subheader("Detalle General de Establecimientos")
+# 6. TABLA FINAL
+st.subheader("📋 Datos en Crudo")
 st.dataframe(df_filtered)
-
-# 6. BOTÓN DE DESCARGA
-csv = df_filtered.to_csv(index=False).encode('utf-8')
-st.download_button(
-    label="📥 Descargar Reporte Filtrado",
-    data=csv,
-    file_name='reporte_educativo_filtrado.csv',
-    mime='text/csv',
-)
 
