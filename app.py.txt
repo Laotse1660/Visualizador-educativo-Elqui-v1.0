@@ -1,0 +1,65 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+
+# 1. CONFIGURACIÓN DE LA PÁGINA
+st.set_page_config(page_title="Monitor Educativo Coquimbo 2024", layout="wide")
+
+# 2. CARGA DE DATOS
+@st.cache_data # Esto hace que la app sea rápida al no recargar el CSV cada vez
+def load_data():
+    df = pd.read_csv('tabla_integral_criticos_2024.csv')
+    return df
+
+df = load_data()
+
+# 3. INTERFAZ: Título y Filtros
+st.title("📊 Seguimiento de Establecimientos Críticos (2019-2024)")
+st.markdown("Análisis de resultados Simce e Indicadores de Desarrollo Personal y Social (IDPS)")
+
+with st.sidebar:
+    st.header("Filtros de Búsqueda")
+    comuna_sel = st.multiselect("Selecciona Comuna(s):", 
+                               options=df['Comuna'].unique(), 
+                               default=df['Comuna'].unique())
+    
+    nivel_2019 = st.selectbox("Filtrar por Categoría 2019:", 
+                             ["Todos", "INSUFICIENTE", "MEDIO-BAJO"])
+
+# Aplicar Filtros
+df_filtered = df[df['Comuna'].isin(comuna_sel)]
+if nivel_2019 != "Todos":
+    # Filtramos si fue crítico en básica o media
+    df_filtered = df_filtered[(df_filtered['Cat_2019_Basica'] == nivel_2019) | 
+                              (df_filtered['Cat_2019_Media'] == nivel_2019)]
+
+# 4. VISUALIZACIONES PRINCIPALES
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("Simce 4° Básico: Lectura vs Matemáticas")
+    fig_4b = px.scatter(df_filtered, x="Simce_Lect_4B", y="Simce_Mate_4B",
+                        hover_name="Nombre Establecimiento", color="Comuna",
+                        size="Autoestima_4B", # El tamaño del punto indica autoestima
+                        template="plotly_white")
+    st.plotly_chart(fig_4b, use_container_width=True)
+
+with col2:
+    st.subheader("Simce II Medio: Lectura vs Matemáticas")
+    fig_2m = px.scatter(df_filtered, x="Simce_Lect_2M", y="Simce_Mate_2M",
+                        hover_name="Nombre Establecimiento", color="Comuna",
+                        template="plotly_white")
+    st.plotly_chart(fig_2m, use_container_width=True)
+
+# 5. TABLA DE DATOS DETALLADA
+st.subheader("Detalle General de Establecimientos")
+st.dataframe(df_filtered)
+
+# 6. BOTÓN DE DESCARGA
+csv = df_filtered.to_csv(index=False).encode('utf-8')
+st.download_button(
+    label="📥 Descargar Reporte Filtrado",
+    data=csv,
+    file_name='reporte_educativo_filtrado.csv',
+    mime='text/csv',
+)
